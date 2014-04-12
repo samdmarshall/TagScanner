@@ -206,7 +206,7 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 					if (result.nameLength != 0) { // if the callback produced a zero length tag, then ignore and continue searching gracefully
 						dispatch_group_async(group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{ // fire off a async thread for processing a new full memory search for the potential tag that was just found.
 							char *bytes = NULL;
-							if (ReadBytes(result.task, result.nameAddress, (void **)&bytes, &result.nameLength)) { // reading bytes from memory to retrieve the tag name found
+							if (ReadBytes(result.task, result.nameAddress, (void **)&bytes, (mach_vm_size_t *)&result.nameLength)) { // reading bytes from memory to retrieve the tag name found
 								search_for_data_t searchForFullTagBlock = ^(struct SearchData *searchData, void *variableData, void *compareData, mach_vm_address_t address) {
 									if ((strncmp(variableData, compareData, (size_t)searchData->dataSize) == 0)) { // checking to make sure that the partial tag matches the string found in memory
 										mach_vm_size_t tagLength = FindStringSize(result.task, address, 0); // finding the string size for this tag, when battletags are stored in memory they seem to be followed by a null character (they are c-strings) find this string's length. Results show that not all battle tags have 4 numeric digits in them, some have 5, cannot assume to be a specific length
@@ -216,10 +216,10 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 												NSString *tag = [NSString stringWithCString:bytes encoding:NSUTF8StringEncoding]; // read the c-string
 												NSArray *tagTest = [tag componentsSeparatedByString:@"#"]; // separate by the hash, setting up for tag parsing
 												if (tagTest.count == 2) { // there should only be two results if the string read is a battle.net tag
-													NSInteger identifier = 0;
+													uint32_t identifier = 0;
 													NSScanner *identifierScanner = [NSScanner scannerWithString:[tagTest objectAtIndex:1]]; // setting up parsing for getting the unique ID
-													[identifierScanner scanInt:&identifier]; // some unique IDs are 5 digits instead of 4, and some cases found strings of data that contained the battle.net tag, but wasn't a proper instance storage of it.
-													tag = [[tagTest objectAtIndex:0] stringByAppendingFormat:@"#%i",identifier]; // reading in the unique ID
+													[identifierScanner scanInt:(int*)&identifier]; // some unique IDs are 5 digits instead of 4, and some cases found strings of data that contained the battle.net tag, but wasn't a proper instance storage of it.
+													tag = [[tagTest objectAtIndex:0] stringByAppendingFormat:@"#%zi",identifier]; // reading in the unique ID
 													NSPredicate *tagPredicate = [NSPredicate predicateWithFormat:@"SELF contains %@",tag]; // setting up for filtering against already found tags
 													NSArray *filterResults = [battleTags filteredArrayUsingPredicate:tagPredicate]; // filtering against known tags, it should only print each tag once
 													if (!filterResults.count) { // found a new tag!
@@ -266,101 +266,8 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 	dispatch_release(group); // releasing the dispatch group
 }
 
-#include <sys/types.h>
-#include <sys/ptrace.h>
-#include <Security/Authorization.h>
-#include <security/mac.h>
-#include <mach-o/dyld.h>
-#include <notify.h>
-
-#import <mach/std_types.h>
-#import <mach/mach_traps.h>
-#import <signal.h>
-#import <mach/mach_init.h>
-#import <mach/vm_map.h>
-#import <mach/mach_vm.h>
-#import <mach/mach.h>
-
-int acquireTaskportRight() {
-	AuthorizationRef authorization;
-	OSStatus status = AuthorizationCreate (NULL, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, &authorization);
-	if (status != 0) {
-		fprintf(stderr, "Error creating authorization reference\n");
-		return -1;
-	}
-	AuthorizationItem right = { "system.privilege.taskport", 0, 0 , 0 };
-	AuthorizationItem items[] = { right };
-	AuthorizationRights rights = { sizeof(items) / sizeof(items[0]), items };
-	AuthorizationFlags flags = kAuthorizationFlagInteractionAllowed | kAuthorizationFlagExtendRights | kAuthorizationFlagPreAuthorize;
-	
-	status = AuthorizationCopyRights (authorization, &rights, kAuthorizationEmptyEnvironment, flags, NULL);
-	if (status != 0) {
-		fprintf(stderr, "Error authorizing current process with right to call task_for_pid\n");
-		return -1;
-	}
-	return 0;
-}
-
-
-void checkStatus(int cond, char* msg) {
-	if (!cond) {
-		printf("%s\n", msg);
-		exit(-1);
-	}
-}
-
-void testingTaskForPid() {
-	pid_t child = fork();
-	
-	if (child == 0) {
-		/* PT_TRACE_ME will stop the process after the execl is executed and allows the parent
-		 to take control. */
-		checkStatus(!ptrace(PT_TRACE_ME, 0, 0, 0), "PT_TRACE_ME failed.");
-		execl("/Applications/Calculator.app/Contents/MacOS/Calculator", "/Applications/Calculator.app/Contents/MacOS/Calculator", NULL);
-	} else {
-		/* Get the task for this pid. Seems to require superuser privileges or some gid hack.
-		 Go Apple! */
-		mach_port_t task;
-		
-		checkStatus(acquireTaskportRight()==0,"acquireTaskportRight failed");
-		
-		checkStatus(task_for_pid(mach_task_self(), child, &task) == KERN_SUCCESS, "task_for_pid failed.");
-		
-		/* Get the list of threads in that process (we expect one thread exactly.) */
-		thread_act_port_array_t threadList;
-		mach_msg_type_number_t threadCount;
-		checkStatus(task_threads(task, &threadList, &threadCount) == KERN_SUCCESS, "task_threads failed.");
-		checkStatus(threadCount == 1, "task has more than one thread.");
-		
-		
-		/* Wait for updates from the child process we are tracing */
-		int status;
-		pid_t w = wait(&status);
-		printf("wait pid: %d\n",w);
-		
-		
-		/* Read the register state of the child via Mach (since we are single-stepping the child is guaranteed to be suspended at the moment. */
-		x86_thread_state64_t state;
-		mach_msg_type_number_t stateCount = x86_THREAD_STATE64_COUNT;
-		checkStatus(thread_get_state(threadList[0],
-							   x86_THREAD_STATE64,
-							   (thread_state_t)&state,
-							   &stateCount) == KERN_SUCCESS, "thread_get_state failed.");
-		
-		printf("RIP: %llx\n",state.__rip);
-		
-		
-		
-		
-		checkStatus(ptrace(PT_CONTINUE, child, (char*)1, 0) == 0, "PT_CONTINUE failed.");
-    }
-}
-
-
 int main (int argc, const char * argv[]) {
-	
-	testingTaskForPid();
-#if SAAKGDSGS
+	//testingTaskForPid();
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSMutableArray *battleTags = [[NSMutableArray new] autorelease];
 	NSMutableArray *potentialbattleTags = [[NSMutableArray new] autorelease];
@@ -407,13 +314,12 @@ int main (int argc, const char * argv[]) {
 					return returnTag; // returning nothing, this isn't an instance of a tag name
 				}; // end of callback
 				SearchForData(task, searchData, potentialbattleTags, battleTags, searchForDataCallback); // executing master search through memory to find instances of potential tag names
-				NSLog(@"%i BattleTags found.", battleTags.count); // what is the total number of tags found?
+				NSLog(@"%zi BattleTags found.", battleTags.count); // what is the total number of tags found?
 				free(searchData); // search is finished, free up memory used for search parameters
 				mach_port_deallocate(mach_task_self(), task);
 			}
 		}
 	}
 	[pool drain]; // drain the pool, nothing else to do
-#endif
 	return 0;
 }
