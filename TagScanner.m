@@ -38,8 +38,7 @@
 	2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 	3. All advertising materials mentioning features or use of this software must display the following acknowledgement:
 	This product includes software developed by the Sam Marshall.
-	4. Neither the name of the Sam Marshall nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
+ 
 	THIS SOFTWARE IS PROVIDED BY Sam Marshall ''AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL Sam Marshall BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	
  */
@@ -133,10 +132,12 @@ mach_vm_size_t LengthUntilString(vm_map_t task, mach_vm_address_t address, char 
 	while (YES) {
 		BOOL canReadBytes = ReadBytes(task, address, &buffer, &stringLength);
 		if (canReadBytes) {
-			if (strncmp(((char *)buffer), find, stringLength) == 0)
+			if (strncmp(((char *)buffer), find, stringLength) == 0) {
 				break;
+			}
 			length += charSize;
-		} else {
+		}
+		else {
 			break;
 		}
 		mach_vm_deallocate(current_task(), (vm_offset_t)buffer, stringLength);
@@ -165,8 +166,9 @@ mach_vm_size_t FindStringSize(vm_map_t processTask, mach_vm_address_t address, m
 			}
 		}
 		mach_vm_deallocate(current_task(), (vm_offset_t)buffer, outputtedSize);
-		if (couldReadBytes)
+		if (couldReadBytes) {
 			address += outputtedSize;
+		}
 	}
 	return totalSize;
 }
@@ -278,16 +280,20 @@ int main (int argc, const char * argv[]) {
 			vm_map_t task;
 			kern_return_t result = task_for_pid(current_task(), process, &task); // acquiring task for application instance
 			if (result != KERN_SUCCESS) {
-				if (task != MACH_PORT_NULL)
+				if (task != MACH_PORT_NULL) {
 					mach_port_deallocate(mach_task_self(), task);
+				}
 				task = MACH_PORT_NULL;
 				NSLog(@"Failed to get task for process %d: %s", process, mach_error_string(result));
-			} else if (!MACH_PORT_VALID(task)) {
-				if (task != MACH_PORT_NULL)
+			}
+			else if (!MACH_PORT_VALID(task)) {
+				if (task != MACH_PORT_NULL) {
 					mach_port_deallocate(mach_task_self(), task);
+				}
 				task = MACH_PORT_NULL;
 				NSLog(@"Mach port is not valid for process %d", process);
-			} else {
+			}
+			else {
 				NSLog(@"Successfully acquired task for process %d",process); // task for the process has been acquired, now setup the search parameters
 				struct SearchData *searchData = malloc(sizeof(struct SearchData));
 				mach_vm_size_t length = 0;
@@ -306,8 +312,9 @@ int main (int argc, const char * argv[]) {
 						mach_vm_size_t tagLength = LengthUntilString(task, tagNameAddress, closingBracket, strlen(closingBracket)); // finding the length of the tag name
 						char *bytes = NULL;
 						if (ReadBytes(task, tagNameAddress, (void **)&bytes, &tagLength)) { // reading the tag name
-							if (bytes && strlen(bytes)) // verifying the tag name is not and empty string
+							if (bytes && strlen(bytes)) { // verifying the tag name is not and empty string
 								returnTag = (struct TagName){tagNameAddress, tagLength, task}; // returning TagName struct which stores where the tag name is in memory and how long it is
+							}
 						}
 						mach_vm_deallocate(current_task(), (vm_offset_t)bytes, tagLength); // freeing the bytes just read for the tag name
 					}
