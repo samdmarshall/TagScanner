@@ -219,7 +219,7 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 													uint32_t identifier = 0;
 													NSScanner *identifierScanner = [NSScanner scannerWithString:[tagTest objectAtIndex:1]]; // setting up parsing for getting the unique ID
 													[identifierScanner scanInt:(int*)&identifier]; // some unique IDs are 5 digits instead of 4, and some cases found strings of data that contained the battle.net tag, but wasn't a proper instance storage of it.
-													tag = [[tagTest objectAtIndex:0] stringByAppendingFormat:@"#%zi",identifier]; // reading in the unique ID
+													tag = [[tagTest objectAtIndex:0] stringByAppendingFormat:@"#%i",identifier]; // reading in the unique ID
 													NSPredicate *tagPredicate = [NSPredicate predicateWithFormat:@"SELF contains %@",tag]; // setting up for filtering against already found tags
 													NSArray *filterResults = [battleTags filteredArrayUsingPredicate:tagPredicate]; // filtering against known tags, it should only print each tag once
 													if (!filterResults.count) { // found a new tag!
@@ -243,7 +243,7 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 									NSArray *filterResults = [potentialbattleTags filteredArrayUsingPredicate:tagPredicate]; // make sure a search is not already happening for this tag
 									if (filterResults.count == 0 && potentialTag) { // this is a new tag
 										[potentialbattleTags addObject:potentialTag]; // add it to the potential tags pool
-										struct SearchData *tagSearch = malloc(sizeof(struct SearchData)); // creating search parameters for finding the full battle tag
+										struct SearchData *tagSearch = calloc(1, sizeof(struct SearchData)); // creating search parameters for finding the full battle tag
 										tagSearch->searchValue = valueFromString(potentialTag, &length); 
 										tagSearch->dataSize = length;
 										tagSearch->dataAlignment = sizeof(int8_t);
