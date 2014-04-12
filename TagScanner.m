@@ -269,7 +269,6 @@ void SearchForData(vm_map_t processTask, struct SearchData *searchData, NSMutabl
 }
 
 int main (int argc, const char * argv[]) {
-	//testingTaskForPid();
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSMutableArray *battleTags = [[NSMutableArray new] autorelease];
 	NSMutableArray *potentialbattleTags = [[NSMutableArray new] autorelease];
