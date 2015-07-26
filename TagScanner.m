@@ -1,6 +1,6 @@
 /*
  Battle.net Tag Scanner Proof of Concept
- Created by: Samuel Marshall
+ Created by: Sam Marshall
 
  Contact: me@samdmarshall.com
  Twitter: @Dirk_Gently
