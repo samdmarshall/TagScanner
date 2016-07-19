@@ -108,6 +108,7 @@ NSArray *MemoryRegionsForProcess(vm_map_t task) { // returns array of all memory
 		region->protection = info.protection;
 		[regions addObject:[NSValue value:region withObjCType:@encode(struct MemoryRegion)]];
 		address += size;
+		free(region);
 	}
 	return [NSArray arrayWithArray:regions];
 }
